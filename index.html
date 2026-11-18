@@ -1,23 +1,446 @@
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-    url.hostname = "lark-giant-pepper-bison.grok.me";
-    const headers = new Headers(request.headers);
-    headers.set("host", "lark-giant-pepper-bison.grok.me");
-    const resp = await fetch(url, {
-      method: request.method,
-      headers,
-      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
-      redirect: "manual",
-    });
-    const out = new Headers(resp.headers);
-    const loc = out.get("location");
-    if (loc && loc.includes("lark-giant-pepper-bison.grok.me")) {
-      out.set(
-        "location",
-        loc.replace("https://lark-giant-pepper-bison.grok.me", "https://track.ultimatetop.in"),
-      );
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>投手结算单</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --field: #1a1a1a;
+      --fg: #e5e7eb;
+      --muted: #a1a1aa;
+      --faint: #71717a;
+      --line: #27272a;
+      --hot: #e85d24;
+      --hot-hover: #cf4e1b;
+      --gold: #f5b400;
+      --danger: #ff5a4f;
+      --danger-bg: #3f1d1d;
+      --primary: #c2410c;
     }
-    return new Response(resp.body, { status: resp.status, headers: out });
-  },
-};
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); }
+    body {
+      font-family: "Noto Sans SC", sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    button, input { font: inherit; }
+    .wrap { max-width: 28rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+    .admin-wrap { max-width: 56rem; }
+    .top { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+    .ghost { color: var(--faint); font-size: 0.75rem; }
+    h1 { text-align: center; font-size: 1.35rem; margin: 0 0 2rem; }
+    label { display: block; margin: 0 0 0.4rem; font-size: 0.9rem; }
+    label.req { color: var(--danger); font-weight: 700; }
+    .field, .btn {
+      width: 100%;
+      min-height: 2.75rem;
+      border-radius: 0.4rem;
+      border: 1px solid #333;
+      background: var(--field);
+      color: var(--fg);
+      padding: 0.55rem 0.85rem;
+    }
+    .field::placeholder { color: #8a8a8a; }
+    .field:focus { outline: none; border-color: var(--hot); background: #fff; color: #161616; }
+    .dates { display: flex; align-items: center; gap: 0.5rem; }
+    .dates .field { width: 50%; color-scheme: dark; }
+    .hint { margin: 0.5rem 0 0; color: var(--faint); font-size: 0.75rem; line-height: 1.6; }
+    .stack { display: grid; gap: 1rem; }
+    .btn {
+      border: 0;
+      background: var(--hot);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--hot-hover); }
+    .btn.small, .btn.line, .btn.danger {
+      width: auto;
+      min-height: 2.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0 0.8rem;
+    }
+    .btn.line { background: var(--field); color: var(--fg); border: 1px solid var(--line); }
+    .btn.danger { background: var(--danger-bg); color: var(--danger); }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
+    .empty, .err { text-align: center; color: var(--faint); padding: 2rem 0; font-size: 0.9rem; }
+    .err { color: var(--danger); }
+    .card {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    .row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: flex-start; }
+    .badge {
+      border: 1px solid var(--hot);
+      color: var(--hot);
+      border-radius: 0.4rem;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.55rem;
+      white-space: nowrap;
+    }
+    .box {
+      margin-top: 1rem;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      border-radius: 0.6rem;
+      text-align: center;
+      padding: 2rem 1rem;
+    }
+    .kicker { letter-spacing: 0.18em; color: var(--muted); font-size: 0.75rem; }
+    .num { margin-top: 0.4rem; font-size: 3rem; font-weight: 700; color: var(--gold); }
+    .linkrow { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .linkbox {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: var(--field);
+      border-radius: 0.4rem;
+      padding: 0.7rem 0.75rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    header.bar { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; }
+    .mark {
+      width: 1.75rem; height: 1.75rem; border-radius: 0.4rem;
+      background: var(--primary); display: grid; place-items: center; font-size: 0.75rem;
+    }
+    .tools { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .tag { color: var(--primary); font-size: 0.75rem; font-weight: 600; }
+    .grid { display: grid; grid-cols: 1fr; gap: 0.75rem; margin-bottom: 1.5rem; }
+    @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .list { border: 1px solid var(--line); border-radius: 0.75rem; background: rgba(20,20,20,.8); overflow: hidden; }
+    .list h2, .create h2 { font-size: 0.9rem; margin: 0; }
+    .head, .item { padding: 0.9rem 1.1rem; }
+    .head { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .item { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; border-top: 1px solid var(--line); }
+    .item:first-of-type { border-top: 0; }
+    .code { font-family: "IBM Plex Mono", monospace; color: var(--primary); }
+    .meta { color: var(--faint); font-size: 0.75rem; margin-top: 0.2rem; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .create { margin-bottom: 1.5rem; }
+    .create .lineup { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .create .field { flex: 1; font-family: "IBM Plex Mono", monospace; }
+    .foot { text-align: center; color: var(--faint); font-size: 0.75rem; margin-top: 1.5rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script>
+    const OFFER = "https://redeemff.ultimatetop.in/?link=" + encodeURIComponent("https://ws7-368.pages.dev?invCode=9HDFH9VQ") + "&pixel=1";
+    const KEY = "ut_ledger_v1";
+    const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    function todayISO() {
+      const now = new Date();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      return now.getFullYear() + "-" + m + "-" + d;
+    }
+
+    function conversions(clicks) {
+      const n = Math.max(0, Math.floor(Number(clicks) || 0));
+      if (n < 10) return 0;
+      if (n <= 100) return Math.floor(n / 10);
+      if (n <= 1000) return Math.round(10 + ((n - 100) / 900) * 75);
+      if (n <= 10000) {
+        const t = Math.log(n / 1000) / Math.log(10);
+        return Math.round(85 + t * 265);
+      }
+      const t = Math.log(n / 10000) / Math.log(10);
+      return Math.round(350 + t * 200);
+    }
+
+    function load() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+        if (saved && Array.isArray(saved.codes)) return saved;
+      } catch (err) {}
+      return {
+        codes: [
+          { code: "OZMNED3E", created: "2026-11-08", visitors: {} },
+          { code: "B29LBSE3", created: "2026-11-10", visitors: {} },
+          { code: "AI-C6914AD", created: "2026-11-12", visitors: {} }
+        ]
+      };
+    }
+
+    function save(db) {
+      localStorage.setItem(KEY, JSON.stringify(db));
+    }
+
+    function cleanCode(raw) {
+      const code = String(raw || "").trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+      if (code.length < 2 || code.length > 32) return "";
+      if (!/^[A-Z0-9]/.test(code)) return "";
+      return code;
+    }
+
+    function makeCode() {
+      const bytes = new Uint8Array(6);
+      crypto.getRandomValues(bytes);
+      let tail = "";
+      for (const byte of bytes) tail += ALPHABET[byte % ALPHABET.length];
+      return "B29" + tail;
+    }
+
+    function visitorId() {
+      const match = document.cookie.match(/(?:^|; )ut_vid=([^;]+)/);
+      if (match) return decodeURIComponent(match[1]);
+      const id = crypto.randomUUID();
+      document.cookie = "ut_vid=" + encodeURIComponent(id) + "; Max-Age=31536000; Path=/; SameSite=Lax";
+      return id;
+    }
+
+    function pageUrl(query) {
+      return location.origin + location.pathname + (query || "");
+    }
+
+    function trackLink(code) {
+      return pageUrl("?go=" + encodeURIComponent(code));
+    }
+
+    function findCode(db, code) {
+      return db.codes.find((item) => item.code === code);
+    }
+
+    function recordClick(code) {
+      const clean = cleanCode(code);
+      if (!clean) return;
+      const db = load();
+      let item = findCode(db, clean);
+      if (!item) {
+        item = { code: clean, created: todayISO(), visitors: {} };
+        db.codes.unshift(item);
+      }
+      const id = visitorId();
+      if (!item.visitors[id]) {
+        item.visitors[id] = todayISO();
+        save(db);
+      }
+    }
+
+    function clicksOf(item, start, end, countries) {
+      const allowed = countries
+        .split(",")
+        .map((part) => part.trim().toUpperCase())
+        .filter((part) => /^[A-Z]{2}$/.test(part));
+      if (countries.trim() && allowed.length === 0) return { invalid: true, count: 0 };
+      const countryOk = allowed.length === 0 || allowed.includes("IN");
+      if (!countryOk) return { invalid: false, count: 0 };
+      let count = 0;
+      Object.values(item.visitors || {}).forEach((day) => {
+        if (start && day < start) return;
+        if (end && day > end) return;
+        count += 1;
+      });
+      return { invalid: false, count };
+    }
+
+    const params = new URLSearchParams(location.search);
+    if (params.get("go")) {
+      recordClick(params.get("go"));
+      location.replace(OFFER);
+    }
+
+    const app = document.querySelector("#app");
+
+    function sheet() {
+      const preset = cleanCode(params.get("code") || "");
+      app.innerHTML = `
+        <div class="wrap">
+          <div class="top"><a class="ghost" href="?admin=1">管理</a></div>
+          <h1>投手结算单</h1>
+          <form id="form" class="stack">
+            <div>
+              <label class="req" for="code">邀请码</label>
+              <input class="field" id="code" required placeholder="请输入邀请码" value="${preset}" autocapitalize="characters" spellcheck="false" />
+            </div>
+            <div>
+              <label for="start">日期范围</label>
+              <div class="dates">
+                <input class="field" id="start" type="date" />
+                <span class="ghost">-</span>
+                <input class="field" id="end" type="date" aria-label="结束日期" />
+              </div>
+              <p class="hint">未选择日期时，默认查询当天。<br />双击日期可选中当天。</p>
+            </div>
+            <div>
+              <label for="country">国家代码</label>
+              <input class="field" id="country" placeholder="多个国家代码用英文逗号分隔" />
+            </div>
+            <button class="btn" type="submit">查询报表</button>
+          </form>
+          <hr class="rule" />
+          <section id="out"><p class="empty">暂无数据</p></section>
+        </div>`;
+
+      const form = document.querySelector("#form");
+      const start = document.querySelector("#start");
+      const end = document.querySelector("#end");
+      start.addEventListener("dblclick", () => { const day = start.value || todayISO(); start.value = day; end.value = day; });
+      end.addEventListener("dblclick", () => { const day = end.value || todayISO(); start.value = day; end.value = day; });
+
+      function show(code, startDate, endDate, countries) {
+        const clean = cleanCode(code);
+        const out = document.querySelector("#out");
+        if (!clean) { out.innerHTML = '<p class="empty">暂无数据</p>'; return; }
+        if (startDate && endDate && startDate > endDate) {
+          out.innerHTML = '<p class="err">开始日期不能晚于结束日期。</p>';
+          return;
+        }
+        const rangeStart = startDate || endDate || todayISO();
+        const rangeEnd = endDate || startDate || todayISO();
+        const db = load();
+        const item = findCode(db, clean);
+        if (!item) { out.innerHTML = '<p class="empty">暂无数据</p>'; return; }
+        const result = clicksOf(item, rangeStart, rangeEnd, countries);
+        if (result.invalid) { out.innerHTML = '<p class="err">请使用两位国家代码，用逗号分隔。</p>'; return; }
+        const link = trackLink(item.code);
+        out.innerHTML = `
+          <div class="card">
+            <div class="row">
+              <p style="margin:0;color:var(--muted);font-size:.9rem">渠道标识：<br /><b style="color:var(--fg)">${item.code}</b></p>
+              <span class="badge">结算每 5 分钟更新一次</span>
+            </div>
+            <div class="box">
+              <div class="kicker">转化</div>
+              <div class="num">${conversions(result.count)}</div>
+              <p class="hint">数据自动计算，每 5 分钟更新一次。</p>
+            </div>
+            <div style="margin-top:1rem;font-size:.9rem">专属推广链接（跟踪链接）</div>
+            <div class="linkrow">
+              <div class="linkbox" id="link">${link}</div>
+              <button class="btn small" id="copy" type="button">复制链接</button>
+            </div>
+          </div>`;
+        document.querySelector("#copy").onclick = async () => {
+          try { await navigator.clipboard.writeText(link); alert("链接已复制到剪贴板！"); }
+          catch (err) { prompt("复制链接", link); }
+        };
+      }
+
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        show(document.querySelector("#code").value, start.value, end.value, document.querySelector("#country").value);
+      };
+      if (preset) show(preset, "", "", "");
+    }
+
+    function admin() {
+      let pending = "";
+      let draft = makeCode();
+      function draw() {
+        const db = load();
+        app.innerHTML = `
+          <div class="wrap admin-wrap">
+            <header class="bar">
+              <div>
+                <a class="brand" href="?admin=1"><span class="mark">UT</span>终极榜</a>
+                <h1 style="text-align:left;margin:0.8rem 0 0.2rem">管理面板</h1>
+                <p class="hint" style="margin:0">创建并管理跟踪码</p>
+              </div>
+              <div class="tools">
+                <a class="btn line" href="./">打开结算单 →</a>
+                <button class="btn line" id="copy-home" type="button">复制面板链接</button>
+                <span class="tag">仅管理员</span>
+              </div>
+            </header>
+            <div class="grid">
+              <a class="card" href="./">
+                <b>结算单</b>
+                <div class="hint">推广员在这里查看转化</div>
+              </a>
+              <div class="card">
+                <b>落地页</b>
+                <div class="hint">跟踪链接按设备只计一次独立点击，然后打开落地页。</div>
+              </div>
+            </div>
+            <form class="card create" id="create">
+              <h2>创建跟踪码</h2>
+              <div class="lineup" style="margin-top:.8rem">
+                <input class="field" id="draft" readonly value="${draft}" />
+                <button class="btn small" type="submit">创建代码</button>
+              </div>
+              <p class="hint">代码已经写好。点创建代码即可保存，不用自己输入。</p>
+            </form>
+            <section class="list">
+              <div class="head">
+                <h2>全部跟踪码</h2>
+                <span class="hint">${db.codes.length} 个代码</span>
+              </div>
+              ${db.codes.length === 0 ? '<p class="empty">还没有代码</p>' : db.codes.map((item) => {
+                const total = Object.keys(item.visitors || {}).length;
+                return `<div class="item">
+                  <div>
+                    <div class="code">${item.code}</div>
+                    <div class="meta">创建于 ${item.created} • 点击 ${total} · 转化 ${conversions(total)}</div>
+                  </div>
+                  <div class="actions">
+                    <button class="btn line" data-copy="${item.code}" type="button">复制跟踪链接</button>
+                    <a class="btn line" href="?code=${encodeURIComponent(item.code)}">查看报表</a>
+                    ${pending === item.code
+                      ? `<button class="btn danger" data-confirm="${item.code}" type="button">确认删除</button>`
+                      : `<button class="btn danger" data-del="${item.code}" type="button">删除</button>`}
+                  </div>
+                </div>`;
+              }).join("")}
+            </section>
+            <p class="foot">管理面板仅自己使用。推广员只拿到结算单链接。</p>
+          </div>`;
+
+        document.querySelector("#copy-home").onclick = () => navigator.clipboard.writeText(pageUrl("")).then(() => alert("结算单链接已复制"));
+        document.querySelector("#create").onsubmit = (event) => {
+          event.preventDefault();
+          const db = load();
+          if (!db.codes.some((item) => item.code === draft)) {
+            db.codes.unshift({ code: draft, created: todayISO(), visitors: {} });
+            save(db);
+          }
+          draft = makeCode();
+          pending = "";
+          draw();
+          alert("已就绪，请在下方复制跟踪链接。");
+        };
+        app.querySelectorAll("[data-copy]").forEach((button) => {
+          button.onclick = () => navigator.clipboard.writeText(trackLink(button.dataset.copy)).then(() => alert("跟踪链接已复制"));
+        });
+        app.querySelectorAll("[data-del]").forEach((button) => {
+          button.onclick = () => { pending = button.dataset.del; draw(); };
+        });
+        app.querySelectorAll("[data-confirm]").forEach((button) => {
+          button.onclick = () => {
+            const db = load();
+            db.codes = db.codes.filter((item) => item.code !== button.dataset.confirm);
+            save(db);
+            pending = "";
+            draw();
+          };
+        });
+      }
+      draw();
+    }
+
+    if (!params.get("go")) {
+      if (params.get("admin") === "1") admin();
+      else sheet();
+    }
+  </script>
+</body>
+</html>
